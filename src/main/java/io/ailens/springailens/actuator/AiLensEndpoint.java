@@ -1,11 +1,12 @@
 package io.ailens.springailens.actuator;
 
-import io.ailens.springailens.model.AiCallEvent;
-import io.ailens.springailens.store.RingBufferEventStore;
+import java.util.List;
+
 import org.springframework.boot.actuate.endpoint.annotation.Endpoint;
 import org.springframework.boot.actuate.endpoint.annotation.ReadOperation;
 
-import java.util.List;
+import io.ailens.springailens.model.AiCallEvent;
+import io.ailens.springailens.util.store.RingBufferEventStore;
 
 @Endpoint(id = "ai-lens")
 public class AiLensEndpoint {

@@ -1,17 +1,20 @@
-package io.ailens.springailens.interceptor;
+package io.ailens.springailens.util.interceptor;
 
-import io.ailens.springailens.anomaly.AnomalyDetector;
-import io.ailens.springailens.model.AnomalyReport;
-import io.ailens.springailens.model.AiCallEvent;
-import io.ailens.springailens.store.RingBufferEventStore;
+import java.time.Instant;
+import java.util.UUID;
+
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.Prompt;
 
-import java.time.Instant;
-import java.util.UUID;
+import io.ailens.springailens.model.AiCallEvent;
+import io.ailens.springailens.model.AnomalyReport;
+import io.ailens.springailens.model.PromptDiffResult;
+import io.ailens.springailens.util.anomaly.AnomalyDetector;
+import io.ailens.springailens.util.diff.PromptDiffTracker;
+import io.ailens.springailens.util.store.RingBufferEventStore;
 
 @Aspect
 public class AiLensInterceptor {
@@ -19,9 +22,13 @@ public class AiLensInterceptor {
     private final RingBufferEventStore store;
     private final AnomalyDetector anomalyDetector;
 
-    public AiLensInterceptor(RingBufferEventStore store, AnomalyDetector anomalyDetector) {
+    private final PromptDiffTracker diffTracker;
+
+    public AiLensInterceptor(RingBufferEventStore store, AnomalyDetector anomalyDetector,
+                             PromptDiffTracker diffTracker) {
         this.store = store;
         this.anomalyDetector = anomalyDetector;
+        this.diffTracker = diffTracker;
     }
 
     @Around("execution(* org.springframework.ai.chat.model.ChatModel.call(..))")
@@ -60,16 +67,17 @@ public class AiLensInterceptor {
                 latencyMs,
                 promptTokens,
                 completionTokens,
-                AnomalyReport.none()
+                AnomalyReport.none(),
+                null
         );
-
         AnomalyReport anomaly = anomalyDetector.analyze(event);
+        PromptDiffResult diff = diffTracker.track(event.model(), event.prompt());
 
         store.add(new AiCallEvent(
                 event.id(), event.timestamp(), event.model(),
                 event.prompt(), event.response(), event.latencyMs(),
                 event.promptTokens(), event.completionTokens(),
-                anomaly
+                anomaly, diff
         ));
 
         return result;

@@ -1,14 +1,15 @@
 package io.ailens.springailens.actuator;
 
-import io.ailens.springailens.model.AiCallEvent;
-import io.ailens.springailens.model.AnomalyReport;
-import io.ailens.springailens.store.RingBufferEventStore;
-import org.junit.jupiter.api.Test;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Instant;
 import java.util.UUID;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.Test;
+
+import io.ailens.springailens.model.AiCallEvent;
+import io.ailens.springailens.model.AnomalyReport;
+import io.ailens.springailens.util.store.RingBufferEventStore;
 
 class AiLensEndpointTest {
 
@@ -31,10 +32,9 @@ class AiLensEndpointTest {
         AiLensEndpoint endpoint = new AiLensEndpoint(store);
 
         store.add(new AiCallEvent(UUID.randomUUID().toString(), Instant.now(),
-                "OpenAiChatModel", "prompt 1", "response 1", 100, 10, 20, AnomalyReport.none()));
+                "OpenAiChatModel", "prompt 1", "response 1", 100, 10, 20, AnomalyReport.none(), null));
         store.add(new AiCallEvent(UUID.randomUUID().toString(), Instant.now(),
-                "OpenAiChatModel", "prompt 2", "response 2", 200, 15, 25, AnomalyReport.none()));
-        AiLensEndpoint.AiLensReport report = endpoint.report();
+                "OpenAiChatModel", "prompt 2", "response 2", 200, 15, 25, AnomalyReport.none(), null));        AiLensEndpoint.AiLensReport report = endpoint.report();
 
         assertThat(report.totalCalls()).isEqualTo(2);
         assertThat(report.avgLatencyMs()).isEqualTo(150);

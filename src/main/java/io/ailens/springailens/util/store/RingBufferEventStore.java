@@ -1,10 +1,10 @@
-package io.ailens.springailens.store;
-
-import io.ailens.springailens.model.AiCallEvent;
+package io.ailens.springailens.util.store;
 
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.List;
+
+import io.ailens.springailens.model.AiCallEvent;
 
 public class RingBufferEventStore {
 

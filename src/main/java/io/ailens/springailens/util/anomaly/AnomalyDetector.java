@@ -1,11 +1,11 @@
-package io.ailens.springailens.anomaly;
+package io.ailens.springailens.util.anomaly;
+
+import java.util.List;
 
 import io.ailens.springailens.model.AiCallEvent;
 import io.ailens.springailens.model.AnomalyReport;
 import io.ailens.springailens.model.AnomalyType;
-import io.ailens.springailens.store.RingBufferEventStore;
-
-import java.util.List;
+import io.ailens.springailens.util.store.RingBufferEventStore;
 
 public class AnomalyDetector {
 

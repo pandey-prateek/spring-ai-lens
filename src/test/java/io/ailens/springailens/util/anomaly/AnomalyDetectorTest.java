@@ -1,15 +1,16 @@
-package io.ailens.springailens.anomaly;
+package io.ailens.springailens.util.anomaly;
 
-import io.ailens.springailens.model.AiCallEvent;
-import io.ailens.springailens.model.AnomalyReport;
-import io.ailens.springailens.model.AnomalyType;
-import io.ailens.springailens.store.RingBufferEventStore;
-import org.junit.jupiter.api.Test;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Instant;
 import java.util.UUID;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.Test;
+
+import io.ailens.springailens.model.AiCallEvent;
+import io.ailens.springailens.model.AnomalyReport;
+import io.ailens.springailens.model.AnomalyType;
+import io.ailens.springailens.util.store.RingBufferEventStore;
 
 class AnomalyDetectorTest {
 
@@ -23,7 +24,8 @@ class AnomalyDetectorTest {
                 latencyMs,
                 promptTokens,
                 completionTokens,
-                AnomalyReport.none()
+                AnomalyReport.none(),
+                null
         );
     }
 

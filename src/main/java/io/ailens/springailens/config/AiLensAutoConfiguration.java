@@ -1,13 +1,15 @@
 package io.ailens.springailens.config;
 
-import io.ailens.springailens.actuator.AiLensEndpoint;
-import io.ailens.springailens.anomaly.AnomalyDetector;
-import io.ailens.springailens.interceptor.AiLensInterceptor;
-import io.ailens.springailens.store.RingBufferEventStore;
-import io.ailens.springailens.web.AiLensDashboardController;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
+
+import io.ailens.springailens.actuator.AiLensEndpoint;
+import io.ailens.springailens.util.anomaly.AnomalyDetector;
+import io.ailens.springailens.util.diff.PromptDiffTracker;
+import io.ailens.springailens.util.interceptor.AiLensInterceptor;
+import io.ailens.springailens.util.store.RingBufferEventStore;
+import io.ailens.springailens.web.AiLensDashboardController;
 
 @AutoConfiguration
 public class AiLensAutoConfiguration {
@@ -26,8 +28,16 @@ public class AiLensAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public AiLensInterceptor aiLensInterceptor(RingBufferEventStore store, AnomalyDetector detector) {
-        return new AiLensInterceptor(store, detector);
+    public PromptDiffTracker aiLensPromptDiffTracker() {
+        return new PromptDiffTracker();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public AiLensInterceptor aiLensInterceptor(RingBufferEventStore store,
+                                               AnomalyDetector detector,
+                                               PromptDiffTracker diffTracker) {
+        return new AiLensInterceptor(store, detector, diffTracker);
     }
 
     @Bean

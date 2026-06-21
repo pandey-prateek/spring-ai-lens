@@ -1,13 +1,14 @@
 package io.ailens.springailens.web;
 
-import io.ailens.springailens.model.AiCallEvent;
-import io.ailens.springailens.store.RingBufferEventStore;
+import java.util.List;
+
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
+import io.ailens.springailens.model.AiCallEvent;
+import io.ailens.springailens.util.store.RingBufferEventStore;
 
 @RestController
 @RequestMapping("/ai-lens")
@@ -39,7 +40,10 @@ public class AiLensDashboardController {
             if (e.anomaly() != null && e.anomaly().hasAnomaly()) {
                 anomalyBadge = "<span class='badge'>⚠ %s</span>".formatted(e.anomaly().message());
             }
-
+            String diffBadge = "";
+            if (e.diff() != null && e.diff().hasChanged()) {
+                diffBadge = "<span class='diff-badge'>⟳ prompt changed</span>";
+            }
             rows.append("""
         <tr class="%s">
             <td>%s</td>
@@ -47,6 +51,7 @@ public class AiLensDashboardController {
             <td class="response">%s</td>
             <td>%d ms</td>
             <td>%d / %d</td>
+            <td>%s</td>
             <td>%s</td>
             <td>%s</td>
         </tr>
@@ -59,7 +64,8 @@ public class AiLensDashboardController {
                     e.promptTokens(),
                     e.completionTokens(),
                     e.timestamp().toString(),
-                    anomalyBadge
+                    anomalyBadge,
+                    diffBadge
             ));
         }
 
@@ -90,6 +96,7 @@ public class AiLensDashboardController {
                     .empty { text-align: center; padding: 48px; color: #aaa; }
                     tr.anomaly td { background: #fff8f0; }
                             .badge { background: #ff9800; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; white-space: nowrap; }
+                    .diff-badge { background: #2196f3; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; }
                 </style>
             </head>
             <body>
@@ -113,6 +120,7 @@ public class AiLensDashboardController {
                                         <th>Tokens (in/out)</th>
                                         <th>Timestamp</th>
                                         <th>Anomaly</th>
+                                                <th>Diff</th>
                             </tr>
                         </thead>
                         <tbody>

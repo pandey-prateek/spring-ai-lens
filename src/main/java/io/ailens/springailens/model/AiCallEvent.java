@@ -11,5 +11,6 @@ public record AiCallEvent(
         long latencyMs,
         int promptTokens,
         int completionTokens,
-        AnomalyReport anomaly
+        AnomalyReport anomaly,
+        PromptDiffResult diff
 ) {}
