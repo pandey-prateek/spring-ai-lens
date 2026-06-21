@@ -1,34 +1,41 @@
 package io.ailens.springailens.util.interceptor;
 
-import java.time.Instant;
-import java.util.UUID;
-
+import io.ailens.springailens.model.AiCallEvent;
+import io.ailens.springailens.model.AnomalyReport;
+import io.ailens.springailens.model.PromptDiffResult;
+import io.ailens.springailens.util.otel.AiLensOtelExporter;
+import io.ailens.springailens.util.anomaly.AnomalyDetector;
+import io.ailens.springailens.util.diff.PromptDiffTracker;
+import io.ailens.springailens.util.store.RingBufferEventStore;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.Prompt;
 
-import io.ailens.springailens.model.AiCallEvent;
-import io.ailens.springailens.model.AnomalyReport;
-import io.ailens.springailens.model.PromptDiffResult;
-import io.ailens.springailens.util.anomaly.AnomalyDetector;
-import io.ailens.springailens.util.diff.PromptDiffTracker;
-import io.ailens.springailens.util.store.RingBufferEventStore;
+import java.time.Instant;
+import java.util.Optional;
+import java.util.UUID;
 
 @Aspect
 public class AiLensInterceptor {
 
     private final RingBufferEventStore store;
     private final AnomalyDetector anomalyDetector;
-
     private final PromptDiffTracker diffTracker;
+    private final Optional<AiLensOtelExporter> otelExporter;
 
     public AiLensInterceptor(RingBufferEventStore store, AnomalyDetector anomalyDetector,
                              PromptDiffTracker diffTracker) {
+        this(store, anomalyDetector, diffTracker, Optional.empty());
+    }
+
+    public AiLensInterceptor(RingBufferEventStore store, AnomalyDetector anomalyDetector,
+                             PromptDiffTracker diffTracker, Optional<AiLensOtelExporter> otelExporter) {
         this.store = store;
         this.anomalyDetector = anomalyDetector;
         this.diffTracker = diffTracker;
+        this.otelExporter = otelExporter;
     }
 
     @Around("execution(* org.springframework.ai.chat.model.ChatModel.call(..))")
@@ -70,15 +77,19 @@ public class AiLensInterceptor {
                 AnomalyReport.none(),
                 null
         );
+
         AnomalyReport anomaly = anomalyDetector.analyze(event);
         PromptDiffResult diff = diffTracker.track(event.model(), event.prompt());
 
-        store.add(new AiCallEvent(
+        AiCallEvent finalEvent = new AiCallEvent(
                 event.id(), event.timestamp(), event.model(),
                 event.prompt(), event.response(), event.latencyMs(),
                 event.promptTokens(), event.completionTokens(),
                 anomaly, diff
-        ));
+        );
+
+        store.add(finalEvent);
+        otelExporter.ifPresent(exporter -> exporter.export(finalEvent));
 
         return result;
     }

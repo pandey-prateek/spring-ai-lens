@@ -1,16 +1,20 @@
 package io.ailens.springailens.config;
 
 import io.ailens.springailens.actuator.AiLensEndpoint;
+import io.ailens.springailens.util.otel.AiLensOtelExporter;
 import io.ailens.springailens.util.anomaly.AnomalyDetector;
 import io.ailens.springailens.util.diff.PromptDiffTracker;
 import io.ailens.springailens.util.interceptor.AiLensInterceptor;
 import io.ailens.springailens.util.store.RingBufferEventStore;
 import io.ailens.springailens.web.AiLensDashboardController;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
+
+import java.util.Optional;
 
 @AutoConfiguration
 @EnableConfigurationProperties(AiLensProperties.class)
@@ -41,6 +45,22 @@ public class AiLensAutoConfiguration {
                                                AnomalyDetector detector,
                                                PromptDiffTracker diffTracker) {
         return new AiLensInterceptor(store, detector, diffTracker);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    @ConditionalOnClass(name = "io.opentelemetry.api.GlobalOpenTelemetry")
+    public AiLensOtelExporter aiLensOtelExporter() {
+        return new AiLensOtelExporter();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public AiLensInterceptor aiLensInterceptor(RingBufferEventStore store,
+                                               AnomalyDetector detector,
+                                               PromptDiffTracker diffTracker,
+                                               Optional<AiLensOtelExporter> otelExporter) {
+        return new AiLensInterceptor(store, detector, diffTracker, otelExporter);
     }
 
     @Bean
