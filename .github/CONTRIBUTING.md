@@ -3,7 +3,7 @@
 ## Setup
 
 ```bash
-git clone https://github.com/pandey-prateek/spring-ai-lens.git
+git clone https://github.com/bluntyrod/spring-ai-lens.git
 cd spring-ai-lens
 mvn install -DskipTests
 ```

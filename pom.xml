@@ -4,7 +4,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<name>spring-ai-lens</name>
 	<description>Observability layer for LLM calls in Spring Boot apps</description>
-	<url>https://github.com/pandey-prateek/spring-ai-lens</url>
+	<url>https://github.com/bluntyrod/spring-ai-lens</url>
 
 	<licenses>
 		<license>
@@ -15,16 +15,14 @@
 
 	<developers>
 		<developer>
-			<id>pandey-prateek</id>
-			<name>Prateek Pandey</name>
-			<email>pandey.prateek@outlook.com</email>
+			<id>bluntyrod</id>
 		</developer>
 	</developers>
 
 	<scm>
-		<connection>scm:git:git://github.com/pandey-prateek/spring-ai-lens.git</connection>
-		<developerConnection>scm:git:ssh://github.com/pandey-prateek/spring-ai-lens.git</developerConnection>
-		<url>https://github.com/pandey-prateek/spring-ai-lens</url>
+		<connection>scm:git:git://github.com/bluntyrod/spring-ai-lens.git</connection>
+		<developerConnection>scm:git:ssh://github.com/bluntyrod/spring-ai-lens.git</developerConnection>
+		<url>https://github.com/bluntyrod/spring-ai-lens</url>
 	</scm>
 	<parent>
 		<groupId>org.springframework.boot</groupId>
@@ -33,16 +31,22 @@
 		<relativePath/>
 	</parent>
 
-	<groupId>io.github.pandey-prateek</groupId>
+	<groupId>com.bluntyrod</groupId>
 	<artifactId>springailens</artifactId>
-	<version>0.0.1</version>
+	<version>0.0.2</version>
 	<packaging>jar</packaging>
 	<properties>
 		<java.version>21</java.version>
 		<spring-ai.version>2.0.0</spring-ai.version>
+		<testcontainers.version>1.21.4</testcontainers.version>
 	</properties>
 
 	<dependencies>
+		<dependency>
+			<groupId>org.awaitility</groupId>
+			<artifactId>awaitility</artifactId>
+			<scope>test</scope>
+		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-data-redis</artifactId>
@@ -170,7 +174,7 @@
 			<dependency>
 				<groupId>org.testcontainers</groupId>
 				<artifactId>testcontainers-bom</artifactId>
-				<version>1.19.8</version>
+				<version>1.21.4</version>
 				<type>pom</type>
 				<scope>import</scope>
 			</dependency>
@@ -180,7 +184,7 @@
 		<repository>
 			<id>github</id>
 			<name>GitHub Packages</name>
-			<url>https://maven.pkg.github.com/pandey-prateek/spring-ai-lens</url>
+			<url>https://maven.pkg.github.com/bluntyrod/spring-ai-lens</url>
 		</repository>
 	</distributionManagement>
 
@@ -257,12 +261,6 @@
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-surefire-plugin</artifactId>
-				<configuration>
-					<systemPropertyVariables>
-						<testcontainers.ryuk.disabled>true</testcontainers.ryuk.disabled>
-						<tc.host>unix:///Users/prateekpandey/.colima/default/docker.sock</tc.host>
-					</systemPropertyVariables>
-				</configuration>
 			</plugin>
 			<plugin>
 				<groupId>com.diffplug.spotless</groupId>
