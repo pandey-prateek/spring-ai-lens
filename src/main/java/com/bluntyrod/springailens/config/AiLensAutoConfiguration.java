@@ -8,8 +8,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
-import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.context.annotation.Import;
 
 import com.bluntyrod.springailens.actuator.AiLensEndpoint;
 import com.bluntyrod.springailens.util.EventStore;
@@ -19,40 +18,18 @@ import com.bluntyrod.springailens.util.diff.PromptDiffTracker;
 import com.bluntyrod.springailens.util.interceptor.AiLensInterceptor;
 import com.bluntyrod.springailens.util.metrics.AiLensMetrics;
 import com.bluntyrod.springailens.util.otel.AiLensOtelExporter;
-import com.bluntyrod.springailens.util.store.InMemoryEventStore;
-import com.bluntyrod.springailens.util.store.PostgresEventStore;
-import com.bluntyrod.springailens.util.store.RedisEventStore;
 import com.bluntyrod.springailens.web.AiLensDashboardController;
 
 import io.micrometer.core.instrument.MeterRegistry;
 
 @AutoConfiguration
 @EnableConfigurationProperties(AiLensProperties.class)
+@Import({
+        AiLensMemoryAutoConfiguration.class,
+        AiLensRedisAutoConfiguration.class,
+        AiLensPostgresAutoConfiguration.class
+})
 public class AiLensAutoConfiguration {
-
-    @Bean
-    @ConditionalOnMissingBean(EventStore.class)
-    public EventStore aiLensEventStore(AiLensProperties properties,
-                                       Optional<StringRedisTemplate> redisTemplate,
-                                       Optional<JdbcTemplate> jdbcTemplate) {
-        return switch (properties.getStorage().getType()) {
-            case REDIS -> {
-                if (redisTemplate.isEmpty()) {
-                    throw new IllegalStateException(
-                            "ai-lens.storage.type=redis but spring-boot-starter-data-redis is not on the classpath");
-                }
-                yield new RedisEventStore(redisTemplate.get(), properties);
-            }
-            case POSTGRES -> {
-                if (jdbcTemplate.isEmpty()) {
-                    throw new IllegalStateException(
-                            "ai-lens.storage.type=postgres but spring-boot-starter-jdbc is not on the classpath");
-                }
-                yield new PostgresEventStore(jdbcTemplate.get(), properties);
-            }
-            case MEMORY -> new InMemoryEventStore(properties.getBufferSize());
-        };
-    }
 
     @Bean
     @ConditionalOnMissingBean

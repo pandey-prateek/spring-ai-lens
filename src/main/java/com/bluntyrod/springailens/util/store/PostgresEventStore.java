@@ -15,6 +15,9 @@ import org.springframework.jdbc.core.JdbcTemplate;
 
 import com.bluntyrod.springailens.config.AiLensProperties;
 import com.bluntyrod.springailens.model.AiCallEvent;
+import com.bluntyrod.springailens.model.AnomalyReport;
+import com.bluntyrod.springailens.model.AnomalyType;
+import com.bluntyrod.springailens.model.PromptDiffResult;
 import com.bluntyrod.springailens.util.EventStore;
 
 public class PostgresEventStore implements EventStore {
@@ -32,7 +35,9 @@ public class PostgresEventStore implements EventStore {
             has_anomaly BOOLEAN,
             anomaly_type VARCHAR(50),
             anomaly_message TEXT,
-            prompt_changed BOOLEAN
+            prompt_changed BOOLEAN,
+            prompt_hash VARCHAR(32),
+            previous_prompt_hash VARCHAR(32)
         )
         """;
 
@@ -40,8 +45,8 @@ public class PostgresEventStore implements EventStore {
         INSERT INTO ai_lens_events
         (id, timestamp, model, prompt, response, latency_ms,
          prompt_tokens, completion_tokens, has_anomaly, anomaly_type,
-         anomaly_message, prompt_changed)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         anomaly_message, prompt_changed, prompt_hash, previous_prompt_hash)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT (id) DO NOTHING
         """;
 
@@ -104,6 +109,8 @@ public class PostgresEventStore implements EventStore {
                     ? event.anomaly().type().name() : null);
             ps.setString(11, event.anomaly() != null ? event.anomaly().message() : null);
             ps.setBoolean(12, event.diff() != null && event.diff().hasChanged());
+            ps.setString(13, event.diff() != null ? event.diff().currentHash() : null);
+            ps.setString(14, event.diff() != null ? event.diff().previousHash() : null);
         });
     }
 
@@ -138,6 +145,25 @@ public class PostgresEventStore implements EventStore {
     }
 
     private AiCallEvent mapRow(ResultSet rs, int rowNum) throws SQLException {
+        AnomalyReport anomaly = rs.getBoolean("has_anomaly")
+                ? AnomalyReport.of(
+                AnomalyType.valueOf(rs.getString("anomaly_type")),
+                rs.getString("anomaly_message"))
+                : AnomalyReport.none();
+
+        String promptHash = rs.getString("prompt_hash");
+        String previousHash = rs.getString("previous_prompt_hash");
+        PromptDiffResult diff = null;
+        if (promptHash != null) {
+            if (previousHash == null) {
+                diff = PromptDiffResult.firstSeen(promptHash);
+            } else if (rs.getBoolean("prompt_changed")) {
+                diff = PromptDiffResult.changed(previousHash, promptHash, null, null);
+            } else {
+                diff = PromptDiffResult.unchanged(promptHash);
+            }
+        }
+
         return new AiCallEvent(
                 rs.getString("id"),
                 rs.getTimestamp("timestamp").toInstant(),
@@ -147,8 +173,8 @@ public class PostgresEventStore implements EventStore {
                 rs.getLong("latency_ms"),
                 rs.getInt("prompt_tokens"),
                 rs.getInt("completion_tokens"),
-                null,
-                null
+                anomaly,
+                diff
         );
     }
 }
