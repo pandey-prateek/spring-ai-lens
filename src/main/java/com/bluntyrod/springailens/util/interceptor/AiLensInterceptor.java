@@ -16,6 +16,7 @@ import com.bluntyrod.springailens.model.PromptDiffResult;
 import com.bluntyrod.springailens.util.EventStore;
 import com.bluntyrod.springailens.util.anomaly.AnomalyDetector;
 import com.bluntyrod.springailens.util.diff.PromptDiffTracker;
+import com.bluntyrod.springailens.util.diff.PromptRegressionAlerter;
 import com.bluntyrod.springailens.util.metrics.AiLensMetrics;
 import com.bluntyrod.springailens.util.otel.AiLensOtelExporter;
 
@@ -27,20 +28,28 @@ public class AiLensInterceptor {
     private final PromptDiffTracker diffTracker;
     private final Optional<AiLensOtelExporter> otelExporter;
     private final Optional<AiLensMetrics> metrics;
+    private final Optional<PromptRegressionAlerter> regressionAlerter;
 
     public AiLensInterceptor(EventStore store, AnomalyDetector anomalyDetector,
                              PromptDiffTracker diffTracker) {
-        this(store, anomalyDetector, diffTracker, Optional.empty(), Optional.empty());
+        this(store, anomalyDetector, diffTracker, Optional.empty(), Optional.empty(), Optional.empty());
     }
 
     public AiLensInterceptor(EventStore store, AnomalyDetector anomalyDetector,
                              PromptDiffTracker diffTracker, Optional<AiLensOtelExporter> otelExporter,
                              Optional<AiLensMetrics> metrics) {
+        this(store, anomalyDetector, diffTracker, otelExporter, metrics, Optional.empty());
+    }
+
+    public AiLensInterceptor(EventStore store, AnomalyDetector anomalyDetector,
+                             PromptDiffTracker diffTracker, Optional<AiLensOtelExporter> otelExporter,
+                             Optional<AiLensMetrics> metrics, Optional<PromptRegressionAlerter> regressionAlerter) {
         this.store = store;
         this.anomalyDetector = anomalyDetector;
         this.diffTracker = diffTracker;
         this.otelExporter = otelExporter;
         this.metrics = metrics;
+        this.regressionAlerter = regressionAlerter;
     }
 
     @Around("execution(* org.springframework.ai.chat.model.ChatModel.call(..))")
@@ -96,6 +105,7 @@ public class AiLensInterceptor {
         store.add(finalEvent);
         otelExporter.ifPresent(e -> e.export(finalEvent));
         metrics.ifPresent(m -> m.record(finalEvent));
+        regressionAlerter.ifPresent(a -> a.onEvent(finalEvent));
         return result;
     }
 }

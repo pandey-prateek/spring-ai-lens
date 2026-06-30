@@ -5,7 +5,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health, ai-lens
+        include: health, aiLens
 ai-lens:
   buffer-size: 500          # how many calls to keep in memory
   anomaly:
@@ -15,3 +15,6 @@ ai-lens:
   dashboard:
     enabled: true           # toggle dashboard on/off
     path: /ai-lens          # dashboard URL path
+  diff:
+    alert-on-change: true   # log a warning when a prompt template changes
+    webhook-url:             # optional URL to POST a JSON payload to on prompt change

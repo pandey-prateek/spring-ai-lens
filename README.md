@@ -14,8 +14,9 @@
 
 `spring-ai-lens` is a zero-configuration observability library for Spring Boot applications that use Spring AI's `ChatModel`. Drop one dependency onto the classpath and instantly get:
 
-- **AOP interception** of every `ChatModel.call()` — no code changes needed
-- **Live dashboard** at `/ai-lens` — prompt, response, latency, token usage, anomaly and diff badges, auto-refreshes every 5 seconds
+- **AOP interception** of every `ChatModel.call()` — no code changes needed, and **provider-agnostic**: works with any Spring AI `ChatModel` (OpenAI, Azure OpenAI, Anthropic, Ollama, Mistral, Vertex AI Gemini, Bedrock, HuggingFace, etc.)
+- **Live dashboard** at `/ai-lens` — prompt, response, latency, token usage, anomaly and diff badges, auto-refreshes every 5 seconds, with **per-model filtering** and **time-range filtering**
+- **Prompt diff viewer** — `GET /ai-lens/diff/{eventId}` side-by-side previous/current prompt comparison with `<ins>`/`<del>` word-level highlighting, plus an optional regression-alert webhook
 - **Actuator endpoint** at `/actuator/ai-lens` — JSON report for CI and monitoring hooks
 - **Anomaly detection** — latency spikes and token cost outliers flagged automatically with `⚠` badges
 - **Prompt diff tracking** — detects when a prompt template changes between calls, shown as `⟳` badges
@@ -83,6 +84,10 @@ ai-lens:
     enabled: true
     path: /ai-lens
 
+  diff:
+    alert-on-change: true        # log a WARN when a prompt template changes
+    webhook-url:                 # optional: POST a JSON payload here on prompt change
+
   storage:
     type: MEMORY                 # MEMORY | REDIS | POSTGRES
 
@@ -147,7 +152,8 @@ spring-ai-lens/
     │   │   ├── InMemoryStorageProperties.java
     │   │   ├── RedisStorageProperties.java
     │   │   ├── PostgresStorageProperties.java
-    │   │   └── DashboardProperties.java
+    │   │   ├── DashboardProperties.java
+    │   │   └── DiffProperties.java                  ← ai-lens.diff.* — alertOnChange, webhookUrl
     │   ├── model/
     │   │   ├── AiCallEvent.java                     ← core immutable record
     │   │   ├── AnomalyReport.java                   ← hasAnomaly, type, message
@@ -161,6 +167,8 @@ spring-ai-lens/
     │   │   ├── anomaly/AnomalyDetector.java         ← rolling avg comparison, configurable thresholds
     │   │   ├── diff/PromptDiffTracker.java          ← per-model ConcurrentHashMap tracking
     │   │   ├── diff/PromptHasher.java               ← SHA-256 + normalization (numbers/UUIDs/emails)
+    │   │   ├── diff/PromptDiffRenderer.java         ← word-level LCS diff → ins/del HTML
+    │   │   ├── diff/PromptRegressionAlerter.java    ← log warning + optional webhook on prompt change
     │   │   ├── interceptor/AiLensInterceptor.java   ← AOP @Around on ChatModel.call()
     │   │   ├── metrics/AiLensMetrics.java           ← Micrometer counters + timers
     │   │   ├── otel/AiLensOtelExporter.java         ← OTel span export via GlobalOpenTelemetry
@@ -307,7 +315,7 @@ previous_prompt_hash VARCHAR(32)
 
 ## Test suite
 
-**92 tests, 0 failures.**
+**106 tests, 0 failures.**
 
 Run all:
 ```bash
@@ -329,10 +337,12 @@ Run without Docker (skips integration tests):
 | `AnomalyDetectorTest` | Unit | 5 |
 | `PromptDiffTrackerTest` | Unit | 4 |
 | `PromptHasherTest` | Unit | 4 |
+| `PromptDiffRendererTest` | Unit | 5 |
+| `PromptRegressionAlerterTest` | Unit | 4 |
 | `AiLensInterceptorTest` | Unit | 2 |
 | `AiLensMetricsTest` | Unit | 5 |
 | `AiLensOtelExporterTest` | Unit | 3 |
-| `AiLensDashboardControllerTest` | Unit | 3 |
+| `AiLensDashboardControllerTest` | Unit | 8 |
 | `RedisEventStoreTest` | Unit (Mockito) | 12 |
 | `RedisEventStoreIntegrationTest` | Integration (Testcontainers) | 11 |
 | `PostgresEventStoreTest` | Unit (Mockito) | 9 |
@@ -359,19 +369,26 @@ Integration tests use `@DisabledIfSystemProperty(named = "skip.integration.tests
 
 ## What is done ✅
 
-- AOP interception of all `ChatModel.call()` invocations
+- AOP interception of all `ChatModel.call()` invocations — provider-agnostic, works with **any** Spring AI `ChatModel` implementation (OpenAI, Azure OpenAI, Anthropic, Ollama, Mistral, Vertex AI Gemini, Bedrock, HuggingFace, etc.) with zero code changes, since interception happens on the framework interface, not a specific provider class
 - Streaming interception via `AiLensStreamAdvisor`
 - `InMemoryEventStore` ring buffer
 - `RedisEventStore` — leftPush, trim, TTL, full Jackson serialization
 - `PostgresEventStore` — async batch writer, auto table creation, idempotent inserts, full `mapRow()` reconstruction of `AnomalyReport` and `PromptDiffResult`
 - Auto-configuration split into per-backend classes — no classpath pollution, no `TypeNotPresentException`
 - Live dashboard at `/ai-lens` with anomaly and diff badges
+- **Per-model filtering** on the dashboard — dropdown auto-populated from every model name seen across stored events, so all AI models/providers in use are discoverable and filterable in one place
+- **Time-range filtering** on the dashboard — `?from=`/`?to=` ISO-8601 instant query params
+- **Prompt diff viewer UI** — `GET /ai-lens/diff/{eventId}` renders a side-by-side previous/current prompt comparison with `<ins>`/`<del>` word-level highlighting
+- **`PromptRegressionAlerter`** — logs a `WARN` and optionally POSTs a JSON payload to a configured webhook whenever a prompt template changes
 - Actuator endpoint at `/actuator/ai-lens`
 - Anomaly detection — latency and token spikes
 - Prompt diff tracking with normalization
 - OpenTelemetry export — validated with Jaeger
 - Micrometer metrics — validated with Prometheus
-- IntelliJ autocomplete for all `ai-lens.*` properties
+- IntelliJ autocomplete for all `ai-lens.*` properties, including the new `ai-lens.diff.*` block
+- Mockito dynamic-agent-loading warning suppressed in Surefire config
+- Javadoc on the public API surface (`EventStore`, `AiCallEvent`, `AiLensProperties`)
+- Release profile (`-Prelease`) added to `pom.xml` and a tag-triggered `release` job added to CI for Maven Central publishing under `com.bluntyrod`
 - 92 passing tests including Testcontainers integration tests
 - Spotless formatting enforced
 - GitHub Actions CI green
@@ -382,29 +399,19 @@ Integration tests use `@DisabledIfSystemProperty(named = "skip.integration.tests
 
 ## What is TODO 🔲
 
-### Phase 4 — Prompt diff viewer UI
-
-Infrastructure exists (`PromptDiffResult` captures `previousPrompt` and `currentPrompt`). Missing:
-
-- `GET /ai-lens/diff/{eventId}` endpoint in `AiLensDashboardController`
-- Side-by-side diff view with `<ins>` / `<del>` highlighting
-- `PromptRegressionAlerter` — log warning or HTTP POST webhook when prompt changes
-
 ### Phase 5 — Maven Central publish under com.bluntyrod
 
-- GPG key setup and Sonatype account for `com.bluntyrod` namespace (domain verification via `bluntyrod.com`)
-- CI `release` job triggered on tag push
+Code-side wiring is done (`release` Maven profile, GPG-sign-on-deploy, `central-publishing-maven-plugin`, tag-triggered CI `release` job). What remains is account/credential setup, which cannot be done from inside the repo:
+
+- Create a Sonatype Central account and verify the `com.bluntyrod` namespace (DNS TXT record on `bluntyrod.com`)
+- Generate a GPG keypair, publish the public key to a keyserver, and add `GPG_PRIVATE_KEY`, `GPG_PASSPHRASE`, `SONATYPE_USERNAME`, `SONATYPE_PASSWORD` as GitHub Actions secrets
+- Push a `vX.Y.Z` tag to trigger the new `release` job and verify the artifact lands on Central
 - `AiLensOtelExporter` — integrate properly with Spring Boot's OTel autoconfigure rather than `GlobalOpenTelemetry`
 
-### Dashboard improvements
+### Nice to have
 
-- Per-model filtering — dropdown or tabs; data already tagged, UI change only
-- Time-range filtering — `?from=` and `?to=` query params; needs `getInRange(Instant, Instant)` on `EventStore` interface and all three implementations
-
-### Code quality
-
-- Fix Mockito agent warning — add `-javaagent` for `mockito-core` in Surefire config
-- Write Javadoc on public API surface: `EventStore`, `AiCallEvent`, `AiLensProperties`
+- Webhook delivery currently fires on every `CHANGED` diff result with no retry/backoff — fine for low-volume alerting, but a dead-letter or retry policy would help under webhook outages
+- `AiLensDashboardController` filtering is in-memory (`store.getAll()` + stream filter); fine at the default 500-event buffer size, but a `getInRange`/`getByModel` method on `EventStore` would let Redis/Postgres push the filter down instead
 
 ---
 
@@ -430,6 +437,9 @@ Infrastructure exists (`PromptDiffResult` captures `previousPrompt` and `current
 | `leftPush` for Redis | Atomic O(1) cap with `LTRIM`; `getAll()` reverses for chronological order |
 | SHA-256 truncated to 16 chars | 64-bit hash space; negligible collision probability at typical prompt volumes |
 | Split auto-configuration | `Optional<StringRedisTemplate>` in method signature still triggers class loading — only `@ConditionalOnClass` at the configuration class level prevents it |
+| Dashboard filtering done in-memory, not pushed to `EventStore` | Buffer is capped (default 500); pushing filters into Redis/Postgres adds complexity with little payoff at that scale |
+| `PromptRegressionAlerter` webhook is fire-and-forget async | Alerting must never add latency or failure risk to the intercepted LLM call path |
+| GPG-sign and Central-publish moved into a `release` Maven profile | Keeps `mvn install`/`mvn deploy` safe for contributors without a GPG key; only the tagged CI job activates `-Prelease` |
 
 ---
 
@@ -451,8 +461,8 @@ SHA-256 of normalised prompt (numbers → `N`, UUIDs → `UUID`, emails → `EMA
 - [x] Phase 3.5 — persistent storage (Redis + Postgres)
 - [x] Phase 3.6 — prompt diff tracking
 - [x] Phase 3.7 — OpenTelemetry + Micrometer integrations
-- [ ] Phase 4 — prompt diff viewer UI + regression alerts
-- [ ] Phase 5 — Maven Central publish under com.bluntyrod
+- [x] Phase 4 — prompt diff viewer UI + regression alerts + per-model/time-range dashboard filtering
+- [ ] Phase 5 — Maven Central publish under com.bluntyrod (code wiring done; account/credential setup is a manual, one-time human step)
 
 exit code 0
 Done

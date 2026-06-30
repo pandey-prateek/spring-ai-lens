@@ -204,4 +204,45 @@ class PostgresEventStoreIntegrationTest {
         assertThat(store.count()).isEqualTo(total);
         assertThat(store.getAll()).hasSize(total);
     }
+
+    @Test
+    void promptDiffTextRoundTripsThroughPostgres() {
+        com.bluntyrod.springailens.model.PromptDiffResult diff =
+                com.bluntyrod.springailens.model.PromptDiffResult.changed(
+                        "oldHash", "newHash", "previous prompt text", "current prompt text");
+
+        AiCallEvent e = new AiCallEvent(
+                UUID.randomUUID().toString(), Instant.now(),
+                "OllamaChatModel", "current prompt text", "response",
+                100, 10, 20, AnomalyReport.none(), diff
+        );
+        store.add(e);
+        awaitCount(1);
+
+        AiCallEvent reloaded = store.findById(e.id()).orElseThrow();
+
+        assertThat(reloaded.diff()).isNotNull();
+        assertThat(reloaded.diff().hasChanged()).isTrue();
+        assertThat(reloaded.diff().previousPrompt()).isEqualTo("previous prompt text");
+        assertThat(reloaded.diff().currentPrompt()).isEqualTo("current prompt text");
+    }
+
+    @Test
+    void migrationAddsPromptTextColumnsToPreExistingTable() {
+        // Simulates an older deployment whose table predates the previous_prompt/current_prompt
+        // columns: drop them, then constructing a new PostgresEventStore against the same
+        // database must add them back without failing.
+        jdbc.execute("ALTER TABLE ai_lens_events DROP COLUMN IF EXISTS previous_prompt");
+        jdbc.execute("ALTER TABLE ai_lens_events DROP COLUMN IF EXISTS current_prompt");
+
+        AiLensProperties properties = new AiLensProperties();
+        properties.getStorage().getPostgres().setFlushIntervalMs(50);
+        new PostgresEventStore(jdbc, properties);
+
+        Integer columnCount = jdbc.queryForObject("""
+                SELECT COUNT(*) FROM information_schema.columns
+                WHERE table_name = 'ai_lens_events' AND column_name IN ('previous_prompt', 'current_prompt')
+                """, Integer.class);
+        assertThat(columnCount).isEqualTo(2);
+    }
 }

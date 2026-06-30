@@ -8,7 +8,7 @@ import org.springframework.boot.actuate.endpoint.annotation.ReadOperation;
 import com.bluntyrod.springailens.model.AiCallEvent;
 import com.bluntyrod.springailens.util.EventStore;
 
-@Endpoint(id = "ai-lens")
+@Endpoint(id = "aiLens")
 public class AiLensEndpoint {
 
     private final EventStore store;

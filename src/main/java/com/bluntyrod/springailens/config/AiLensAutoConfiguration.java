@@ -14,6 +14,7 @@ import com.bluntyrod.springailens.util.EventStore;
 import com.bluntyrod.springailens.util.advisor.AiLensStreamAdvisor;
 import com.bluntyrod.springailens.util.anomaly.AnomalyDetector;
 import com.bluntyrod.springailens.util.diff.PromptDiffTracker;
+import com.bluntyrod.springailens.util.diff.PromptRegressionAlerter;
 import com.bluntyrod.springailens.util.interceptor.AiLensInterceptor;
 import com.bluntyrod.springailens.util.metrics.AiLensMetrics;
 import com.bluntyrod.springailens.util.otel.AiLensOtelExporter;
@@ -40,6 +41,12 @@ public class AiLensAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
+    public PromptRegressionAlerter aiLensPromptRegressionAlerter(AiLensProperties properties) {
+        return new PromptRegressionAlerter(properties.getDiff());
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
     @ConditionalOnClass(name = "io.opentelemetry.api.GlobalOpenTelemetry")
     public AiLensOtelExporter aiLensOtelExporter() {
         return new AiLensOtelExporter();
@@ -58,8 +65,9 @@ public class AiLensAutoConfiguration {
                                                AnomalyDetector detector,
                                                PromptDiffTracker diffTracker,
                                                Optional<AiLensOtelExporter> otelExporter,
-                                               Optional<AiLensMetrics> metrics) {
-        return new AiLensInterceptor(store, detector, diffTracker, otelExporter, metrics);
+                                               Optional<AiLensMetrics> metrics,
+                                               Optional<PromptRegressionAlerter> regressionAlerter) {
+        return new AiLensInterceptor(store, detector, diffTracker, otelExporter, metrics, regressionAlerter);
     }
 
     @Bean
@@ -68,8 +76,9 @@ public class AiLensAutoConfiguration {
                                                    AnomalyDetector detector,
                                                    PromptDiffTracker diffTracker,
                                                    Optional<AiLensOtelExporter> otelExporter,
-                                                   Optional<AiLensMetrics> metrics) {
-        return new AiLensStreamAdvisor(store, detector, diffTracker, otelExporter, metrics);
+                                                   Optional<AiLensMetrics> metrics,
+                                                   Optional<PromptRegressionAlerter> regressionAlerter) {
+        return new AiLensStreamAdvisor(store, detector, diffTracker, otelExporter, metrics, regressionAlerter);
     }
 
     @Bean

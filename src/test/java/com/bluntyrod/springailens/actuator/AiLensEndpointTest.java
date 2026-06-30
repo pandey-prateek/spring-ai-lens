@@ -6,6 +6,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.actuate.endpoint.annotation.Endpoint;
 
 import com.bluntyrod.springailens.model.AiCallEvent;
 import com.bluntyrod.springailens.model.AnomalyReport;
@@ -40,5 +41,15 @@ class AiLensEndpointTest {
         assertThat(report.totalCalls()).isEqualTo(2);
         assertThat(report.avgLatencyMs()).isEqualTo(150);
         assertThat(report.totalTokens()).isEqualTo(70); // 10+20+15+25
+    }
+
+    @Test
+    void endpointIdIsValidForActuator() {
+        // Actuator endpoint ids must match [a-zA-Z][a-zA-Z0-9]* — no hyphens or other
+        // punctuation — or Spring Boot logs "contains invalid characters" at startup
+        // and refuses to expose the endpoint correctly.
+        Endpoint annotation = AiLensEndpoint.class.getAnnotation(Endpoint.class);
+        assertThat(annotation).isNotNull();
+        assertThat(annotation.id()).matches("[a-zA-Z][a-zA-Z0-9]*");
     }
 }

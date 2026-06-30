@@ -17,6 +17,7 @@ import com.bluntyrod.springailens.model.PromptDiffResult;
 import com.bluntyrod.springailens.util.EventStore;
 import com.bluntyrod.springailens.util.anomaly.AnomalyDetector;
 import com.bluntyrod.springailens.util.diff.PromptDiffTracker;
+import com.bluntyrod.springailens.util.diff.PromptRegressionAlerter;
 import com.bluntyrod.springailens.util.metrics.AiLensMetrics;
 import com.bluntyrod.springailens.util.otel.AiLensOtelExporter;
 
@@ -29,15 +30,26 @@ public class AiLensStreamAdvisor implements StreamAdvisor {
     private final PromptDiffTracker diffTracker;
     private final Optional<AiLensOtelExporter> otelExporter;
     private final Optional<AiLensMetrics> metrics;
+    private final Optional<PromptRegressionAlerter> regressionAlerter;
+
     public AiLensStreamAdvisor(EventStore store,
                                AnomalyDetector anomalyDetector,
                                PromptDiffTracker diffTracker,
                                Optional<AiLensOtelExporter> otelExporter, Optional<AiLensMetrics> metrics) {
+        this(store, anomalyDetector, diffTracker, otelExporter, metrics, Optional.empty());
+    }
+
+    public AiLensStreamAdvisor(EventStore store,
+                               AnomalyDetector anomalyDetector,
+                               PromptDiffTracker diffTracker,
+                               Optional<AiLensOtelExporter> otelExporter, Optional<AiLensMetrics> metrics,
+                               Optional<PromptRegressionAlerter> regressionAlerter) {
         this.store = store;
         this.anomalyDetector = anomalyDetector;
         this.diffTracker = diffTracker;
         this.otelExporter = otelExporter;
         this.metrics = metrics;
+        this.regressionAlerter = regressionAlerter;
     }
 
     @Override
@@ -103,6 +115,7 @@ public class AiLensStreamAdvisor implements StreamAdvisor {
                     store.add(finalEvent);
                     otelExporter.ifPresent(e -> e.export(finalEvent));
                     metrics.ifPresent(m->m.record(finalEvent));
+                    regressionAlerter.ifPresent(a -> a.onEvent(finalEvent));
                 });
     }
 

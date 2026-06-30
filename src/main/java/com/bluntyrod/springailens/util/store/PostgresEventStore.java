@@ -37,16 +37,28 @@ public class PostgresEventStore implements EventStore {
             anomaly_message TEXT,
             prompt_changed BOOLEAN,
             prompt_hash VARCHAR(32),
-            previous_prompt_hash VARCHAR(32)
+            previous_prompt_hash VARCHAR(32),
+            previous_prompt TEXT,
+            current_prompt TEXT
         )
+        """;
+
+    // Adds the previous_prompt/current_prompt columns to tables created by older
+    // versions of spring-ai-lens that only persisted hashes. Safe to run on every
+    // startup: ADD COLUMN IF NOT EXISTS is a no-op once the columns already exist.
+    private static final String MIGRATE_ADD_PROMPT_TEXT_COLUMNS = """
+        ALTER TABLE ai_lens_events
+            ADD COLUMN IF NOT EXISTS previous_prompt TEXT,
+            ADD COLUMN IF NOT EXISTS current_prompt TEXT
         """;
 
     private static final String INSERT = """
         INSERT INTO ai_lens_events
         (id, timestamp, model, prompt, response, latency_ms,
          prompt_tokens, completion_tokens, has_anomaly, anomaly_type,
-         anomaly_message, prompt_changed, prompt_hash, previous_prompt_hash)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         anomaly_message, prompt_changed, prompt_hash, previous_prompt_hash,
+         previous_prompt, current_prompt)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT (id) DO NOTHING
         """;
 
@@ -81,6 +93,7 @@ public class PostgresEventStore implements EventStore {
 
     private void initTable() {
         jdbc.execute(CREATE_TABLE);
+        jdbc.execute(MIGRATE_ADD_PROMPT_TEXT_COLUMNS);
     }
 
     private void startBatchWriter() {
@@ -111,6 +124,8 @@ public class PostgresEventStore implements EventStore {
             ps.setBoolean(12, event.diff() != null && event.diff().hasChanged());
             ps.setString(13, event.diff() != null ? event.diff().currentHash() : null);
             ps.setString(14, event.diff() != null ? event.diff().previousHash() : null);
+            ps.setString(15, event.diff() != null ? event.diff().previousPrompt() : null);
+            ps.setString(16, event.diff() != null ? event.diff().currentPrompt() : null);
         });
     }
 
@@ -153,12 +168,14 @@ public class PostgresEventStore implements EventStore {
 
         String promptHash = rs.getString("prompt_hash");
         String previousHash = rs.getString("previous_prompt_hash");
+        String previousPrompt = rs.getString("previous_prompt");
+        String currentPrompt = rs.getString("current_prompt");
         PromptDiffResult diff = null;
         if (promptHash != null) {
             if (previousHash == null) {
                 diff = PromptDiffResult.firstSeen(promptHash);
             } else if (rs.getBoolean("prompt_changed")) {
-                diff = PromptDiffResult.changed(previousHash, promptHash, null, null);
+                diff = PromptDiffResult.changed(previousHash, promptHash, previousPrompt, currentPrompt);
             } else {
                 diff = PromptDiffResult.unchanged(promptHash);
             }
