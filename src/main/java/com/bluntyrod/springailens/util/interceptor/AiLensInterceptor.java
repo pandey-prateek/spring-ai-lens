@@ -1,0 +1,111 @@
+package com.bluntyrod.springailens.util.interceptor;
+
+import java.time.Instant;
+import java.util.Optional;
+import java.util.UUID;
+
+import org.aspectj.lang.ProceedingJoinPoint;
+import org.aspectj.lang.annotation.Around;
+import org.aspectj.lang.annotation.Aspect;
+import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.prompt.Prompt;
+
+import com.bluntyrod.springailens.model.AiCallEvent;
+import com.bluntyrod.springailens.model.AnomalyReport;
+import com.bluntyrod.springailens.model.PromptDiffResult;
+import com.bluntyrod.springailens.util.EventStore;
+import com.bluntyrod.springailens.util.anomaly.AnomalyDetector;
+import com.bluntyrod.springailens.util.diff.PromptDiffTracker;
+import com.bluntyrod.springailens.util.diff.PromptRegressionAlerter;
+import com.bluntyrod.springailens.util.metrics.AiLensMetrics;
+import com.bluntyrod.springailens.util.otel.AiLensOtelExporter;
+
+@Aspect
+public class AiLensInterceptor {
+
+    private final EventStore store;
+    private final AnomalyDetector anomalyDetector;
+    private final PromptDiffTracker diffTracker;
+    private final Optional<AiLensOtelExporter> otelExporter;
+    private final Optional<AiLensMetrics> metrics;
+    private final Optional<PromptRegressionAlerter> regressionAlerter;
+
+    public AiLensInterceptor(EventStore store, AnomalyDetector anomalyDetector,
+                             PromptDiffTracker diffTracker) {
+        this(store, anomalyDetector, diffTracker, Optional.empty(), Optional.empty(), Optional.empty());
+    }
+
+    public AiLensInterceptor(EventStore store, AnomalyDetector anomalyDetector,
+                             PromptDiffTracker diffTracker, Optional<AiLensOtelExporter> otelExporter,
+                             Optional<AiLensMetrics> metrics) {
+        this(store, anomalyDetector, diffTracker, otelExporter, metrics, Optional.empty());
+    }
+
+    public AiLensInterceptor(EventStore store, AnomalyDetector anomalyDetector,
+                             PromptDiffTracker diffTracker, Optional<AiLensOtelExporter> otelExporter,
+                             Optional<AiLensMetrics> metrics, Optional<PromptRegressionAlerter> regressionAlerter) {
+        this.store = store;
+        this.anomalyDetector = anomalyDetector;
+        this.diffTracker = diffTracker;
+        this.otelExporter = otelExporter;
+        this.metrics = metrics;
+        this.regressionAlerter = regressionAlerter;
+    }
+
+    @Around("execution(* org.springframework.ai.chat.model.ChatModel.call(..))")
+    public Object interceptCall(ProceedingJoinPoint pjp) throws Throwable {
+        long start = System.currentTimeMillis();
+
+        String promptText = "";
+        Object[] args = pjp.getArgs();
+        if (args.length > 0 && args[0] instanceof Prompt prompt) {
+            promptText = prompt.getContents();
+        }
+
+        Object result = pjp.proceed();
+        long latencyMs = System.currentTimeMillis() - start;
+
+        String responseText = "";
+        int promptTokens = 0;
+        int completionTokens = 0;
+
+        if (result instanceof ChatResponse response) {
+            if (response.getResult() != null) {
+                responseText = response.getResult().getOutput().getText();
+            }
+            if (response.getMetadata() != null && response.getMetadata().getUsage() != null) {
+                promptTokens = response.getMetadata().getUsage().getPromptTokens().intValue();
+                completionTokens = response.getMetadata().getUsage().getCompletionTokens().intValue();
+            }
+        }
+
+        AiCallEvent event = new AiCallEvent(
+                UUID.randomUUID().toString(),
+                Instant.now(),
+                pjp.getTarget().getClass().getSimpleName(),
+                promptText,
+                responseText,
+                latencyMs,
+                promptTokens,
+                completionTokens,
+                AnomalyReport.none(),
+                null
+        );
+
+        AnomalyReport anomaly = anomalyDetector.analyze(event);
+        PromptDiffResult diff = diffTracker.track(event.model(), event.prompt());
+
+        AiCallEvent finalEvent = new AiCallEvent(
+                event.id(), event.timestamp(), event.model(),
+                event.prompt(), event.response(), event.latencyMs(),
+                event.promptTokens(), event.completionTokens(),
+                anomaly, diff
+        );
+
+        store.add(finalEvent);
+        otelExporter.ifPresent(e -> e.export(finalEvent));
+        metrics.ifPresent(m -> m.record(finalEvent));
+        regressionAlerter.ifPresent(a -> a.onEvent(finalEvent));
+        return result;
+    }
+}

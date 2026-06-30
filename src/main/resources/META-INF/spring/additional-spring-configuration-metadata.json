@@ -35,6 +35,17 @@
       "type": "java.lang.String",
       "defaultValue": "/ai-lens",
       "description": "URL path for the embedded dashboard."
+    },
+    {
+      "name": "ai-lens.diff.alert-on-change",
+      "type": "java.lang.Boolean",
+      "defaultValue": true,
+      "description": "Log a WARN when a prompt template change is detected for a model."
+    },
+    {
+      "name": "ai-lens.diff.webhook-url",
+      "type": "java.lang.String",
+      "description": "Optional URL to POST a JSON payload to whenever a prompt template change is detected."
     }
   ],
   "hints": [
